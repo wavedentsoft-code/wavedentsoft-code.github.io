@@ -14,7 +14,6 @@
         <div class="row justify-content-center">
             <div class="col-lg-8 col-md-10">
                 <div class="text-center mb-4">
-                    <!-- Можете добавить сюда свой логотип -->
                     <h1 class="display-5">Wavedent Flasher</h1>
                     <p class="lead">Прошейте ваше устройство прямо из браузера</p>
                 </div>
@@ -37,6 +36,11 @@
     </div>
 
     <!-- SCRIPTS -->
-    <script type="module" src="js/main.js"></script>
+    <!-- ИЗМЕНЕНИЯ ЗДЕСЬ: -->
+    <!-- 1. Сначала загружаем библиотеку esptool-js. Она создаст глобальные переменные. -->
+    <script src="https://cdn.jsdelivr.net/npm/esptool-js@0.2.0/bundle.js" defer></script>
+    <!-- 2. Затем загружаем наш скрипт, который будет использовать эти переменные. -->
+    <script src="js/main.js" defer></script>
+
 </body>
 </html>
