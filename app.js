@@ -1,4 +1,3 @@
-// Импортируем ESPLoader и Transport из библиотеки
 import { ESPLoader, Transport } from "https://unpkg.com/esptool-js/bundle.js";
 
 const connectButton = document.getElementById('connectButton');
@@ -6,80 +5,100 @@ const flashButton = document.getElementById('flashButton');
 const firmwareInput = document.getElementById('firmwareInput');
 const log = document.getElementById('log');
 
-let device;
+// --- Элементы управления для прошивки ---
+// (можно добавить их в HTML, если нужно)
+// const baudrateSelect = document.getElementById('baudrate');
+// const eraseButton = document.getElementById('eraseButton');
+
+let device = null;
 let transport;
+let chip = null;
 let esploader;
 
-// Объект терминала для вывода логов
+// --- ПОЛНОЦЕННЫЙ ОБЪЕКТ ТЕРМИНАЛА ---
+// Он включает все методы, которые ожидает библиотека
 const term = {
-    write: (msg) => {
-        log.textContent += msg;
-        log.scrollTop = log.scrollHeight; // Автопрокрутка
+    clean: () => {
+        log.textContent = '';
     },
-    writeln: (msg) => term.write(msg + '\n'),
+    write: (data) => {
+        log.textContent += data;
+        log.scrollTop = log.scrollHeight;
+    },
+    writeln: (data) => term.write(data + '\n'),
+    hr: () => term.writeln('--------------------'),
 };
 
 connectButton.addEventListener('click', async () => {
     try {
-        if (!device) {
+        if (device === null) {
             device = await navigator.serial.requestPort({});
             transport = new Transport(device);
-            term.writeln('Устройство подключено.');
+            term.writeln("Устройство подключено.");
         }
-    } catch (error) {
-        term.writeln(`Ошибка подключения: ${error.message}`);
+    } catch (err) {
+        term.writeln(`Ошибка подключения: ${err}`);
     }
 });
 
 flashButton.addEventListener('click', async () => {
+    if (firmwareInput.files.length === 0) {
+        term.writeln("Ошибка: Сначала выберите файл прошивки.");
+        return;
+    }
     if (!transport) {
-        term.writeln('Сначала подключите устройство.');
+        term.writeln("Ошибка: Сначала подключите устройство.");
         return;
     }
 
-    if (firmwareInput.files.length === 0) {
-        term.writeln('Выберите файл прошивки.');
-        return;
-    }
+    // Очищаем лог перед новой прошивкой
+    term.clean();
+    term.writeln("Подготовка к прошивке...");
 
     try {
-        // *** ГЛАВНОЕ ИСПРАВЛЕНИЕ ЗДЕСЬ ***
-        // Все параметры передаются внутри одного объекта
         esploader = new ESPLoader({
-            transport: transport,
-            baudrate: 115200,
-            terminal: term // Свойство должно называться 'terminal'
+            transport,
+            baudrate: 115200, // или parseInt(baudrateSelect.value),
+            terminal: term,
         });
 
-        // Подключаемся к чипу (этот шаг был пропущен)
-        await esploader.main_fn();
-        await esploader.flash_id();
+        // Этот вызов важен для синхронизации с чипом
+        const chipType = await esploader.main_fn();
+        chip = esploader.chip.CHIP_NAME;
+        term.writeln(`Чип определен: ${chip} (${chipType})`);
 
-        const firmwareFile = firmwareInput.files[0];
+        const file = firmwareInput.files[0];
         const reader = new FileReader();
         
         reader.onload = async (e) => {
-            const file_data = e.target.result;
-            term.writeln('Файл прочитан. Начинаю прошивку...');
-            
-            const flashOptions = {
-                fileArray: [{ data: file_data, address: 0x1000 }],
-                flashSize: "keep",
-                flashMode: "keep",
-                flashFreq: "keep",
-                eraseAll: false,
-                compress: true,
-            };
-            
-            await esploader.write_flash(flashOptions);
+            const fileData = e.target.result;
+            term.writeln(`Файл ${file.name} прочитан (размер: ${fileData.byteLength} байт).`);
 
-            term.writeln('\nПрошивка успешно завершена!');
-            await esploader.hard_reset();
+            try {
+                await esploader.write_flash(
+                    [{ data: fileData, address: 0x1000 }],
+                    '0x0', // flash size offset
+                    undefined, // flash mode
+                    undefined, // flash freq
+                    false, // erase all
+                    true, // compress
+                    (fileIndex, written, total) => {
+                        // Эта функция будет обновлять прогресс, если вы захотите добавить progress bar
+                        const progress = Math.round((written / total) * 100);
+                        // console.log(`Прошивка файла ${fileIndex}: ${progress}%`);
+                    }
+                );
+                term.writeln("\nПрошивка успешно завершена!");
+                term.writeln("Перезагрузка устройства...");
+                await esploader.hard_reset();
+            } catch (err) {
+                term.writeln(`\nОшибка во время прошивки: ${err}`);
+            }
         };
-        
-        reader.readAsArrayBuffer(firmwareFile);
 
-    } catch (error) {
-        term.writeln(`\nОшибка прошивки: ${error.message}`);
+        reader.readAsArrayBuffer(file);
+
+    } catch (err) {
+        term.writeln(`Ошибка: ${err}`);
     }
 });
