@@ -1,69 +1,77 @@
 // Импортируем ESPLoader из библиотеки
-import { ESPLoader } from "https://unpkg.com/esptool-js@0.3.0/bundle.js";
+import { ESPLoader } from "https://unpkg.com/esptool-js/bundle.js";
 
 const connectButton = document.getElementById('connectButton');
 const flashButton = document.getElementById('flashButton');
 const firmwareInput = document.getElementById('firmwareInput');
 const log = document.getElementById('log');
 
-// В esptool-js 0.3.0 для подключения нужен объект Transport
-let device, transport;
+let device;
+let transport;
+let esploader;
+
+// Функция для вывода логов в текстовое поле на странице
+const term = {
+    write: (msg) => {
+        log.textContent += msg;
+        log.scrollTop = log.scrollHeight; // Автопрокрутка
+    },
+    writeln: (msg) => term.write(msg + '\n'),
+};
 
 connectButton.addEventListener('click', async () => {
     try {
-        device = await navigator.serial.requestPort({});
-        transport = new ESPLoader.Transport(device);
-        log.textContent += 'Устройство подключено.\n';
+        if (!device) {
+            device = await navigator.serial.requestPort({});
+            transport = {
+                device: device,
+                // Свойство slip_reader_enabled должно быть true для правильной работы
+                slip_reader_enabled: true 
+            };
+            term.writeln('Устройство подключено.');
+        }
     } catch (error) {
-        log.textContent += `Ошибка подключения: ${error.message}\n`;
+        term.writeln(`Ошибка подключения: ${error.message}`);
     }
 });
 
 flashButton.addEventListener('click', async () => {
     if (!transport) {
-        log.textContent += 'Сначала подключите устройство.\n';
+        term.writeln('Сначала подключите устройство.');
         return;
     }
 
     if (firmwareInput.files.length === 0) {
-        log.textContent += 'Выберите файл прошивки.\n';
+        term.writeln('Выберите файл прошивки.');
         return;
     }
-    
-    // Функция для вывода логов
-    const logProgress = (msg) => {
-        log.textContent += msg + '\n';
-        // Прокрутка вниз
-        log.scrollTop = log.scrollHeight;
-    };
 
     try {
-        const esploader = new ESPLoader(transport, 115200, logProgress);
-        
-        // Чтение файла
+        esploader = new ESPLoader({
+            transport: transport,
+            baudrate: 115200,
+            romBaudrate: 115200,
+            log: term.writeln, // Используем нашу функцию для логов
+        });
+
         const firmwareFile = firmwareInput.files[0];
         const reader = new FileReader();
+        
         reader.onload = async (e) => {
-            const firmware = e.target.result;
-            log.textContent += 'Файл прочитан. Начинаю прошивку...\n';
+            const file_data = e.target.result;
+            term.writeln('Файл прочитан. Начинаю прошивку...');
             
-            // Прошивка
-            await esploader.write_flash(
-                [{ data: firmware, address: 0x1000 }],
-                '0x1000',
-                () => {}, // progress callback
-                () => {}, // written callback
-                false,   // no-stub
-                (chip) => {
-                    log.textContent += `Чип: ${chip}\n`;
-                }
-            );
-            log.textContent += 'Прошивка успешно завершена.\n';
+            await esploader.main_fn('write_flash', {
+                '0x1000': file_data,
+            });
+
+            term.writeln('\nПрошивка успешно завершена!');
             await esploader.hard_reset();
         };
-        reader.readAsArrayBuffer(firmwareFile);
+        
+        reader.readAsBinaryString(firmwareFile);
 
     } catch (error) {
-        log.textContent += `\nОшибка прошивки: ${error.message}\n`;
+        term.writeln(`\nОшибка прошивки: ${error.message}`);
     }
 });
