@@ -1,7 +1,7 @@
 // js/main.js
 
-// ИЗМЕНЕНИЕ: Импортируем из ЛОКАЛЬНОГО файла esptool.js
-import { ESPLoader, ESPTransport } from './esptool.js';
+// ИЗМЕНЕНИЕ 1: Мы импортируем не { отдельные, части }, а ОДИН объект `esptool` по умолчанию.
+import esptool from './esptool.js';
 
 const connectButton = document.getElementById('connect-button');
 const logElement = document.getElementById('log');
@@ -26,8 +26,12 @@ connectButton.addEventListener('click', async () => {
         log('Ожидание выбора COM-порта пользователем...');
         try {
             device = await navigator.serial.requestPort({});
-            transport = new ESPTransport(device);
-            esploader = new ESPLoader(transport, BAUD_RATE, null, (msg) => log(msg));
+            
+            // ИЗМЕНЕНИЕ 2: Используем esptool.ESPTransport
+            transport = new esptool.ESPTransport(device);
+            
+            // ИЗМЕНЕНИЕ 3: Используем esptool.ESPLoader
+            esploader = new esptool.ESPLoader(transport, BAUD_RATE, null, (msg) => log(msg));
 
             log('Подключение к устройству...');
             await esploader.main_fn();
