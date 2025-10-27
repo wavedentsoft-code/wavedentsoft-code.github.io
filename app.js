@@ -1,5 +1,5 @@
-// Импортируем ESPLoader из библиотеки
-import { ESPLoader } from "https://unpkg.com/esptool-js/bundle.js";
+// Импортируем ESPLoader и Transport из библиотеки
+import { ESPLoader, Transport } from "https://unpkg.com/esptool-js/bundle.js";
 
 const connectButton = document.getElementById('connectButton');
 const flashButton = document.getElementById('flashButton');
@@ -23,11 +23,8 @@ connectButton.addEventListener('click', async () => {
     try {
         if (!device) {
             device = await navigator.serial.requestPort({});
-            transport = {
-                device: device,
-                // Свойство slip_reader_enabled должно быть true для правильной работы
-                slip_reader_enabled: true 
-            };
+            // Создаем экземпляр Transport, как того требует библиотека
+            transport = new Transport(device); 
             term.writeln('Устройство подключено.');
         }
     } catch (error) {
@@ -47,12 +44,8 @@ flashButton.addEventListener('click', async () => {
     }
 
     try {
-        esploader = new ESPLoader({
-            transport: transport,
-            baudrate: 115200,
-            romBaudrate: 115200,
-            log: term.writeln, // Используем нашу функцию для логов
-        });
+        // Передаем объект transport и нашу функцию для логов
+        esploader = new ESPLoader(transport, 115200, term);
 
         const firmwareFile = firmwareInput.files[0];
         const reader = new FileReader();
@@ -61,15 +54,25 @@ flashButton.addEventListener('click', async () => {
             const file_data = e.target.result;
             term.writeln('Файл прочитан. Начинаю прошивку...');
             
-            await esploader.main_fn('write_flash', {
-                '0x1000': file_data,
-            });
+            // Адрес прошивки и данные
+            const flashOptions = {
+                fileArray: [{ data: file_data, address: 0x1000 }],
+                flashSize: "keep",
+                flashMode: "keep",
+                flashFreq: "keep",
+                eraseAll: false,
+                compress: true,
+            };
+            
+            // Вызываем функцию прошивки
+            await esploader.write_flash(flashOptions);
 
             term.writeln('\nПрошивка успешно завершена!');
             await esploader.hard_reset();
         };
         
-        reader.readAsBinaryString(firmwareFile);
+        // Читаем файл как ArrayBuffer, это более надежный способ
+        reader.readAsArrayBuffer(firmwareFile);
 
     } catch (error) {
         term.writeln(`\nОшибка прошивки: ${error.message}`);
