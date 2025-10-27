@@ -10,7 +10,7 @@ let device;
 let transport;
 let esploader;
 
-// Функция для вывода логов в текстовое поле на странице
+// Объект терминала для вывода логов
 const term = {
     write: (msg) => {
         log.textContent += msg;
@@ -23,8 +23,7 @@ connectButton.addEventListener('click', async () => {
     try {
         if (!device) {
             device = await navigator.serial.requestPort({});
-            // Создаем экземпляр Transport, как того требует библиотека
-            transport = new Transport(device); 
+            transport = new Transport(device);
             term.writeln('Устройство подключено.');
         }
     } catch (error) {
@@ -44,8 +43,17 @@ flashButton.addEventListener('click', async () => {
     }
 
     try {
-        // Передаем объект transport и нашу функцию для логов
-        esploader = new ESPLoader(transport, 115200, term);
+        // *** ГЛАВНОЕ ИСПРАВЛЕНИЕ ЗДЕСЬ ***
+        // Все параметры передаются внутри одного объекта
+        esploader = new ESPLoader({
+            transport: transport,
+            baudrate: 115200,
+            terminal: term // Свойство должно называться 'terminal'
+        });
+
+        // Подключаемся к чипу (этот шаг был пропущен)
+        await esploader.main_fn();
+        await esploader.flash_id();
 
         const firmwareFile = firmwareInput.files[0];
         const reader = new FileReader();
@@ -54,7 +62,6 @@ flashButton.addEventListener('click', async () => {
             const file_data = e.target.result;
             term.writeln('Файл прочитан. Начинаю прошивку...');
             
-            // Адрес прошивки и данные
             const flashOptions = {
                 fileArray: [{ data: file_data, address: 0x1000 }],
                 flashSize: "keep",
@@ -64,14 +71,12 @@ flashButton.addEventListener('click', async () => {
                 compress: true,
             };
             
-            // Вызываем функцию прошивки
             await esploader.write_flash(flashOptions);
 
             term.writeln('\nПрошивка успешно завершена!');
             await esploader.hard_reset();
         };
         
-        // Читаем файл как ArrayBuffer, это более надежный способ
         reader.readAsArrayBuffer(firmwareFile);
 
     } catch (error) {
