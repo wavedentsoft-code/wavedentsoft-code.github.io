@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ESP32 Web Flasher</title>
+</head>
+<body>
+    <h1>ESP32 Web Flasher</h1>
+    <button id="connectButton">Подключиться к устройству</button>
+    <br><br>
+    <input type="file" id="firmwareInput">
+    <br><br>
+    <button id="flashButton">Прошить</button>
+    <br><br>
+    <pre id="log"></pre>
+
+    <script src="https://unpkg.com/esptool-js/bundle.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
