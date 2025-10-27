@@ -1,14 +1,18 @@
+// Импортируем ESPLoader из библиотеки
+import { ESPLoader } from "https://unpkg.com/esptool-js@0.3.0/bundle.js";
+
 const connectButton = document.getElementById('connectButton');
 const flashButton = document.getElementById('flashButton');
 const firmwareInput = document.getElementById('firmwareInput');
 const log = document.getElementById('log');
 
-let device;
+// В esptool-js 0.3.0 для подключения нужен объект Transport
+let device, transport;
 
 connectButton.addEventListener('click', async () => {
     try {
-        device = await navigator.serial.requestPort();
-        await device.open({ baudRate: 115200 });
+        device = await navigator.serial.requestPort({});
+        transport = new ESPLoader.Transport(device);
         log.textContent += 'Устройство подключено.\n';
     } catch (error) {
         log.textContent += `Ошибка подключения: ${error.message}\n`;
@@ -16,7 +20,7 @@ connectButton.addEventListener('click', async () => {
 });
 
 flashButton.addEventListener('click', async () => {
-    if (!device) {
+    if (!transport) {
         log.textContent += 'Сначала подключите устройство.\n';
         return;
     }
@@ -25,27 +29,41 @@ flashButton.addEventListener('click', async () => {
         log.textContent += 'Выберите файл прошивки.\n';
         return;
     }
-
-    const firmwareFile = firmwareInput.files[0];
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-        const firmware = e.target.result;
-        const esptool = new ESPLoader({
-            transport: {
-                device: device,
-            },
-            baudrate: 115200,
-            romBaudrate: 115200,
-        });
-
-        try {
-            await esptool.main_fn('write_flash', {
-                '0x1000': firmware,
-            });
-            log.textContent += 'Прошивка успешно завершена.\n';
-        } catch (error) {
-            log.textContent += `Ошибка прошивки: ${error.message}\n`;
-        }
+    
+    // Функция для вывода логов
+    const logProgress = (msg) => {
+        log.textContent += msg + '\n';
+        // Прокрутка вниз
+        log.scrollTop = log.scrollHeight;
     };
-    reader.readAsBinaryString(firmwareFile);
+
+    try {
+        const esploader = new ESPLoader(transport, 115200, logProgress);
+        
+        // Чтение файла
+        const firmwareFile = firmwareInput.files[0];
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            const firmware = e.target.result;
+            log.textContent += 'Файл прочитан. Начинаю прошивку...\n';
+            
+            // Прошивка
+            await esploader.write_flash(
+                [{ data: firmware, address: 0x1000 }],
+                '0x1000',
+                () => {}, // progress callback
+                () => {}, // written callback
+                false,   // no-stub
+                (chip) => {
+                    log.textContent += `Чип: ${chip}\n`;
+                }
+            );
+            log.textContent += 'Прошивка успешно завершена.\n';
+            await esploader.hard_reset();
+        };
+        reader.readAsArrayBuffer(firmwareFile);
+
+    } catch (error) {
+        log.textContent += `\nОшибка прошивки: ${error.message}\n`;
+    }
 });
