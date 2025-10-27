@@ -1,73 +1,67 @@
 // js/main.js
 
-// ИЗМЕНЕНИЕ: Мы полностью убрали строку 'import'
+// ИЗМЕНЕНИЕ: Мы используем правильную ссылку на МОДУЛЬНУЮ версию библиотеки
+import { ESPLoader, ESPTransport } from 'https://cdn.jsdelivr.net/npm/esptool-js@0.2.0/dist/bundle.module.js';
 
-document.addEventListener('DOMContentLoaded', () => {
-    // Получаем доступ к элементам на странице
-    const connectButton = document.getElementById('connect-button');
-    const logElement = document.getElementById('log');
+const connectButton = document.getElementById('connect-button');
+const logElement = document.getElementById('log');
 
-    // Глобальные переменные для хранения состояния
-    let device = null;
-    let transport;
-    let esploader;
-    const BAUD_RATE = 115200;
+let device = null;
+let transport;
+let esploader;
+const BAUD_RATE = 115200;
 
-    // Функция для вывода сообщений в поле логов
-    const log = (message) => {
-        logElement.textContent += message + '\n';
-        logElement.scrollTop = logElement.scrollHeight;
-    };
-    
-    const clearLogs = () => {
-        logElement.textContent = '';
-    }
+const log = (message) => {
+    logElement.textContent += message + '\n';
+    logElement.scrollTop = logElement.scrollHeight;
+};
 
-    // Логика подключения/отключения
-    connectButton.addEventListener('click', async () => {
-        if (!esploader) {
-            clearLogs();
-            log('Ожидание выбора COM-порта пользователем...');
-            try {
-                device = await navigator.serial.requestPort({});
-                // Теперь ESPTransport и ESPLoader доступны как глобальные переменные
-                transport = new ESPTransport(device); 
+const clearLogs = () => {
+    logElement.textContent = '';
+};
 
-                log(`Подключаемся со скоростью ${BAUD_RATE}...`);
-                esploader = new ESPLoader(transport, BAUD_RATE, null, (msg) => log(msg));
+connectButton.addEventListener('click', async () => {
+    if (!esploader) {
+        clearLogs();
+        log('Ожидание выбора COM-порта пользователем...');
+        try {
+            device = await navigator.serial.requestPort({});
+            transport = new ESPTransport(device); 
 
-                await esploader.main_fn();
+            log(`Подключаемся со скоростью ${BAUD_RATE}...`);
+            esploader = new ESPLoader(transport, BAUD_RATE, null, (msg) => log(msg));
 
-                log('Подключение успешно установлено!');
-                log(`Чип: ${esploader.chip.name}`);
-                log(`MAC-адрес: ${esploader.chip.mac}`);
+            await esploader.main_fn();
 
-                connectButton.textContent = 'Отключиться';
-                connectButton.classList.replace('btn-primary', 'btn-danger');
+            log('Подключение успешно установлено!');
+            log(`Чип: ${esploader.chip.name}`);
+            log(`MAC-адрес: ${esploader.chip.mac}`);
 
-            } catch (e) {
-                log(`[ОШИБКА] ${e.message}`);
-                if (transport) {
-                    await transport.disconnect();
-                }
-                device = null;
-                transport = null;
-                esploader = null;
-            }
-        } else {
-            log('Отключение...');
-            try {
+            connectButton.textContent = 'Отключиться';
+            connectButton.classList.replace('btn-primary', 'btn-danger');
+
+        } catch (e) {
+            log(`[ОШИБКА] ${e.message}`);
+            if (transport) {
                 await transport.disconnect();
-                log('Устройство отключено.');
-            } catch (e) {
-                log(`[ОШИБКА ПРИ ОТКЛЮЧЕНИИ] ${e.message}`);
-            } finally {
-                device = null;
-                transport = null;
-                esploader = null;
-                connectButton.textContent = 'Подключиться к устройству';
-                connectButton.classList.replace('btn-danger', 'btn-primary');
             }
+            device = null;
+            transport = null;
+            esploader = null;
         }
-    });
+    } else {
+        log('Отключение...');
+        try {
+            await transport.disconnect();
+            log('Устройство отключено.');
+        } catch (e) {
+            log(`[ОШИБКА ПРИ ОТКЛЮЧЕНИИ] ${e.message}`);
+        } finally {
+            device = null;
+            transport = null;
+            esploader = null;
+            connectButton.textContent = 'Подключиться к устройству';
+            connectButton.classList.replace('btn-danger', 'btn-primary');
+        }
+    }
 });
